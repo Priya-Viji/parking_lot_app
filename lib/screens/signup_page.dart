@@ -12,11 +12,10 @@ class SignupPage extends StatefulWidget {
 
 class _SignupPageState extends State<SignupPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _confirmPassword = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +64,7 @@ class _SignupPageState extends State<SignupPage> {
 
                       // Full Name
                       TextFormField(
-                        controller: _nameController,
+                        controller: _name,
                         decoration: InputDecoration(
                           labelText: "Full Name",
                           prefixIcon: const Icon(Icons.person),
@@ -73,15 +72,19 @@ class _SignupPageState extends State<SignupPage> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        validator: (value) => value!.isEmpty
-                            ? "Please enter your full name"
-                            : null,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return "Please enter your full name";
+                          }
+                          return null;
+                        },
                       ),
+
                       const SizedBox(height: 16),
 
                       // Email
                       TextFormField(
-                        controller: _emailController,
+                        controller: _email,
                         decoration: InputDecoration(
                           labelText: "Email",
                           prefixIcon: const Icon(Icons.email),
@@ -96,7 +99,7 @@ class _SignupPageState extends State<SignupPage> {
 
                       // Password
                       TextFormField(
-                        controller: _passwordController,
+                        controller: _password,
                         obscureText: authProvider.obscurePassword,
                         decoration: InputDecoration(
                           labelText: "Password",
@@ -120,7 +123,7 @@ class _SignupPageState extends State<SignupPage> {
 
                       // Confirm Password
                       TextFormField(
-                        controller: _confirmPasswordController,
+                        controller: _confirmPassword,
                         obscureText: authProvider.obscurePassword,
                         decoration: InputDecoration(
                           labelText: "Confirm Password",
@@ -133,7 +136,7 @@ class _SignupPageState extends State<SignupPage> {
                           if (value!.isEmpty) {
                             return "Please confirm your password";
                           }
-                          if (value != _passwordController.text) {
+                          if (value != _password.text) {
                             return "Passwords do not match";
                           }
                           return null;
@@ -157,12 +160,12 @@ class _SignupPageState extends State<SignupPage> {
                               : () async {
                                   if (_formKey.currentState!.validate()) {
                                     final success = await authProvider.signup(
-                                      _emailController.text.trim(),
-                                      _passwordController.text.trim(),
-                                      _nameController.text.trim(),
+                                      _email.text.trim(),
+                                      _password.text.trim(),
+                                      _name.text.trim(),
                                     );
 
-                                    if (!mounted) return;
+                                    if (!context.mounted) return;
 
                                     if (success) {
                                       ScaffoldMessenger.of(
@@ -172,11 +175,13 @@ class _SignupPageState extends State<SignupPage> {
                                           content: Text("Signup successful!"),
                                         ),
                                       );
+
                                       Navigator.pushAndRemoveUntil(
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) => const HomePage(),
-                                        ),(route)=>false,
+                                        ),
+                                        (route) => false,
                                       );
                                     } else {
                                       ScaffoldMessenger.of(
@@ -205,7 +210,8 @@ class _SignupPageState extends State<SignupPage> {
                                   "Sign Up",
                                   style: TextStyle(
                                     fontSize: 18,
-                                    fontWeight: FontWeight.bold,color: Colors.white
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
                         ),
@@ -219,7 +225,10 @@ class _SignupPageState extends State<SignupPage> {
                         },
                         child: const Text(
                           "Already have an account? Login",
-                          style: TextStyle(color: Colors.deepPurple,fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Colors.deepPurple,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],

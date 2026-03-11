@@ -1,24 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/parking_slot.dart';
+import '../models/parking_history.dart';
 import '../services/parking_service.dart';
 
 class ParkingProvider extends ChangeNotifier {
   final ParkingService _service = ParkingService();
 
-  // ----------------------------
-  // Configurable total slots
-  // ----------------------------
-  final int totalSlots = 20;
-
-  // ----------------------------
-  // Stream of all parking slots
-  // ----------------------------
-  Stream<List<ParkingSlot>> get slotsStream => _service.getSlots();
-
-  // ----------------------------
-  // Loading state
-  // ----------------------------
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -27,25 +14,23 @@ class ParkingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ----------------------------
-  // Reserve a slot
-  // ----------------------------
+  /// Real-time stream of all parking slots
+  Stream<List<ParkingSlot>> get slotsStream => _service.getSlots();
+
+  /// Reserve a parking slot
   Future<void> reserveSlot({
     required String slotId,
     required String userId,
   }) async {
     _setLoading(true);
     try {
-      // ✅ Service now saves entryTime as Timestamp
       await _service.reserveSlot(slotId, userId);
     } finally {
       _setLoading(false);
     }
   }
 
-  // ----------------------------
-  // Release a slot and calculate fee
-  // ----------------------------
+  /// Release a slot and return calculated fee
   Future<int> releaseSlot({
     required String slotId,
     required DateTime entryTime,
@@ -54,34 +39,38 @@ class ParkingProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
     try {
-      // ✅ Service handles fee + exitTime + history saving
-      final fee = await _service.releaseSlot(
+      return await _service.releaseSlot(
         slotId: slotId,
         entryTime: entryTime,
         userId: userId,
         slotNumber: slotNumber,
       );
-      return fee;
     } finally {
       _setLoading(false);
     }
   }
 
-  // ----------------------------
-  // User history stream
-  // ----------------------------
-  Stream<QuerySnapshot> getUserHistory(String userId) {
+  /// Real-time stream of user's parking history
+  Stream<List<ParkingHistory>> getUserHistory(String userId) {
     return _service.getUserHistory(userId);
   }
 
-  // ----------------------------
-  // Summary helpers
-  // ----------------------------
-  Future<int> getAvailableSlots() async {
-    return await _service.countAvailableSlots();
+  /// Count available slots
+  Future<int> getAvailableSlots() => _service.countAvailableSlots();
+
+  /// Count active reservations for a user
+  Future<int> getActiveReservationCount(String userId) =>
+      _service.countUserReservations(userId);
+
+      int calculateFee(DateTime entry, DateTime exit) {
+    final totalMinutes = exit.difference(entry).inMinutes;
+
+    if (totalMinutes <= 10) return 0;
+
+    final minutesAfterFree = totalMinutes - 10;
+    final hours = (minutesAfterFree / 60).ceil();
+
+    return hours * 100;
   }
 
-  Future<int> getActiveReservationCount(String userId) async {
-    return await _service.countUserReservations(userId);
-  }
 }

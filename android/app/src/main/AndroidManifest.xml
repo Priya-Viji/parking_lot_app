@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="parking_lot_app"
+        android:label="Parking Lot"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

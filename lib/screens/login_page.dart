@@ -13,8 +13,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final  _email = TextEditingController();
+  final  _password = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       // Email Field
                       TextFormField(
-                        controller: _emailController,
+                        controller: _email,
                         decoration: InputDecoration(
                           labelText: "Email",
                           prefixIcon: const Icon(Icons.email),
@@ -78,7 +78,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       // Password Field
                       TextFormField(
-                        controller: _passwordController,
+                        controller: _password,
                         obscureText: authProvider.obscurePassword,
                         decoration: InputDecoration(
                           labelText: "Password",
@@ -117,11 +117,11 @@ class _LoginPageState extends State<LoginPage> {
                               : () async {
                                   if (_formKey.currentState!.validate()) {
                                     final success = await authProvider.login(
-                                      _emailController.text.trim(),
-                                      _passwordController.text.trim(),
+                                      _email.text.trim(),
+                                      _password.text.trim(),
                                     );
 
-                                    if (!mounted) return;
+                                    if (!context.mounted) return;
 
                                     if (success) {
                                       ScaffoldMessenger.of(

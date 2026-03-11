@@ -1,26 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ParkingSlot {
-  final String id; //Firebase document ID
-  final int slotNumber; // Unique slot number
-  final bool isAvailable; // Availability status
-  final String? reservedBy; //User Id if reserved
+  final String id;
+  final int slotNumber;
+  final bool isOccupied;
+  final String? reservedBy;
   final DateTime? entryTime;
 
   ParkingSlot({
     required this.id,
     required this.slotNumber,
-    required this.isAvailable,
+    required this.isOccupied,
     this.reservedBy,
     this.entryTime,
   });
-  // Convert Firestore document to model
-  factory ParkingSlot.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+
+  // Convert Firestore map to model
+  factory ParkingSlot.fromMap(String id, Map<String, dynamic> data) {
     return ParkingSlot(
-      id: doc.id,
-      slotNumber: data['slotNumber'],
-      isAvailable: data['isAvailable'],
+      id: id,
+      slotNumber: data['slotNumber'] ?? 0,
+      isOccupied: data['isOccupied'] ?? false,
       reservedBy: data['reservedBy'],
       entryTime: data['entryTime'] != null
           ? (data['entryTime'] as Timestamp).toDate()
@@ -28,11 +28,11 @@ class ParkingSlot {
     );
   }
 
-  //Convert model to Firestore map
+  // Convert model to Firestore map
   Map<String, dynamic> toMap() {
     return {
       'slotNumber': slotNumber,
-      'isAvailable': isAvailable,
+      'isOccupied': isOccupied,
       'reservedBy': reservedBy,
       'entryTime': entryTime,
     };

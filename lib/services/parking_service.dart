@@ -1,115 +1,135 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parking_slot.dart';
+import '../models/parking_history.dart';
 
 class ParkingService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Future<void> initializeSlots(int totalSlots) async {
-    for (int i = 1; i <= totalSlots; i++) {
-      await _db.collection('parking_slots').doc('slot_$i').set({
-        'slotNumber': i,
-        'isAvailable': true,
-        'reservedBy': null,
-        'entryTime': null,
-      });
-    }
-    print("Initialized $totalSlots slots in Firestore");
-  }
+  static const String slotsCollection = "parking_slots";
 
-  // Get all parking slots as a stream
-
+  /// Watch all parking slots in real-time
   Stream<List<ParkingSlot>> getSlots() {
-    return _db
-        .collection('parking_slots')
-        .orderBy('slotNumber')
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => ParkingSlot.fromDoc(doc)).toList(),
-        );
-  }
-
-  // Reserve a parking slot
-  Future<void> reserveSlot(String slotId, String userId) async {
-    await _db.collection('parking_slots').doc(slotId).update({
-      "isAvailable": false,
-      "reservedBy": userId,
-      "entryTime": Timestamp.fromDate(DateTime.now()), // ✅ FIXED
+    return _db.collection(slotsCollection).orderBy('slotNumber').snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => ParkingSlot.fromMap(doc.id, doc.data()))
+          .toList();
     });
   }
 
-  // Release a parking slot and calculate fee
-  
+  /// Reserve a slot using Firestore transaction
+  Future<void> reserveSlot(String slotId, String userId) async {
+    final docRef = _db.collection(slotsCollection).doc(slotId);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(docRef);
+
+      if (!snap.exists) throw Exception("Slot not found");
+
+      final isOccupied = (snap['isOccupied'] ?? false) as bool;
+
+      if (isOccupied) {
+        throw Exception("Slot already occupied");
+      }
+
+      tx.update(docRef, {
+        'isOccupied': true,
+        'reservedBy': userId,
+        'entryTime': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Release slot, calculate fee, and save history
   Future<int> releaseSlot({
     required String slotId,
     required DateTime entryTime,
     required String userId,
     required int slotNumber,
   }) async {
-    final DateTime exitTime = DateTime.now();
-    final Duration duration = exitTime.difference(entryTime);
+    final exitTime = DateTime.now();
+    final fee = _calculateFee(entryTime, exitTime);
 
-    // Calculate fee
-    int fee = 0;
-    if (duration.inMinutes > 10) {
-      int hours = duration.inHours;
-      if (duration.inMinutes % 60 != 0) hours += 1; // round up
-      fee = hours * 100;
-    }
+    final batch = _db.batch();
 
-    // Save history
-    try {
-      await _db.collection('parking_history').add({
-        "slotId": slotId,
-        "slotNumber": slotNumber,
-        "userId": userId,
-        "entryTime": Timestamp.fromDate(entryTime), // ✅ ensure Timestamp
-        "exitTime": Timestamp.fromDate(exitTime),
-        "fee": fee,
-      });
-      print("History saved for slot $slotNumber");
-    } catch (e) {
-      print("Error saving history: $e");
-    }
-
-    // Release the slot
-    await _db.collection('parking_slots').doc(slotId).update({
-      "isAvailable": true,
-      "reservedBy": null,
-      "entryTime": null,
+    // Update slot
+    final slotRef = _db.collection(slotsCollection).doc(slotId);
+    batch.update(slotRef, {
+      'isOccupied': false,
+      'reservedBy': null,
+      'entryTime': null,
     });
 
+    // Save history
+    final historyRef = _db
+        .collection('users')
+        .doc(userId)
+        .collection('history')
+        .doc();
+
+    final history = ParkingHistory(
+      slotNumber: slotNumber,
+      entryTime: entryTime,
+      exitTime: exitTime,
+      fee: fee,
+    );
+
+    batch.set(historyRef, history.toMap());
+
+    await batch.commit();
     return fee;
   }
 
-  // Stream of user-specific parking history
-  Stream<QuerySnapshot> getUserHistory(String userId) {
-    return _db
-        .collection('parking_history')
-        .where('userId', isEqualTo: userId)
-        .where('entryTime', isNotEqualTo: null)
-        .orderBy('entryTime', descending: true)
-        .snapshots();
+  /// Fee calculation logic
+  int _calculateFee(DateTime entry, DateTime exit) {
+    final totalMinutes = exit.difference(entry).inMinutes;
+
+    if (totalMinutes <= 10) return 0;
+
+    final minutesAfterFree = totalMinutes - 10;
+    final hours = (minutesAfterFree / 60).ceil();
+
+    return hours * 100;
   }
 
-  // ----------------------------
+  /// Watch user's parking history in real-time
+  Stream<List<ParkingHistory>> getUserHistory(String userId) {
+    return _db
+        .collection('users')
+        .doc(userId)
+        .collection('history')
+        .orderBy('entryTime', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => ParkingHistory.fromMap(doc.data()))
+              .toList();
+        });
+  }
+
+  // ---------------------------------------------------------
   // Count available slots
-  // ----------------------------
+  // ---------------------------------------------------------
   Future<int> countAvailableSlots() async {
     final snapshot = await _db
         .collection('parking_slots')
-        .where('isAvailable', isEqualTo: true)
+        .where('isOccupied', isEqualTo: false)
         .get();
+
     return snapshot.docs.length;
   }
 
+  // ---------------------------------------------------------
   // Count active reservations for a user
-  
+  // ---------------------------------------------------------
   Future<int> countUserReservations(String userId) async {
     final snapshot = await _db
         .collection('parking_slots')
         .where('reservedBy', isEqualTo: userId)
+        .where('isOccupied', isEqualTo: true)
         .get();
+
     return snapshot.docs.length;
   }
+
+
 }

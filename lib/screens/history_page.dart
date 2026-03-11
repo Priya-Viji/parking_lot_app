@@ -1,9 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 import '../providers/parking_provider.dart';
+import '../models/parking_history.dart';
 
 class HistoryPage extends StatelessWidget {
   const HistoryPage({super.key});
@@ -26,70 +27,53 @@ class HistoryPage extends StatelessWidget {
         ),
         backgroundColor: Colors.deepPurple,
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<List<ParkingHistory>>(
         stream: parkingProvider.getUserHistory(userId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No parking history found."));
+          final history  = snapshot.data!;
+
+          if (history.isEmpty) {
+            return const Center(child: Text("No Parking history Available.",style: TextStyle(fontSize: 16)));
           }
 
-          final historyDocs = snapshot.data!.docs;
-
-          return ListView.builder(
+         return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: historyDocs.length,
+            itemCount: history.length,
             itemBuilder: (context, index) {
-              final doc = historyDocs[index];
-              final data = doc.data() as Map<String, dynamic>;
+              final item = history[index];
 
-              final slotNumber = data['slotNumber'] ?? 0;
-
-              // ✅ Safely handle timestamps
-              DateTime? entryTime;
-              DateTime? exitTime;
-
-              if (data['entryTime'] is Timestamp) {
-                entryTime = (data['entryTime'] as Timestamp).toDate();
-              }
-              if (data['exitTime'] is Timestamp) {
-                exitTime = (data['exitTime'] as Timestamp).toDate();
-              }
-
-              final fee = data['fee'] ?? 0;
-
-              final formattedEntry = entryTime != null
-                  ? DateFormat('dd/MM/yyyy HH:mm').format(entryTime)
-                  : "N/A";
-              final formattedExit = exitTime != null
-                  ? DateFormat('dd/MM/yyyy HH:mm').format(exitTime)
-                  : "N/A";
+              final entry = DateFormat(
+                'dd MMM, hh:mm a',
+              ).format(item.entryTime);
+              final exit = DateFormat('dd MMM, hh:mm a').format(item.exitTime);
+              final duration = item.exitTime
+                  .difference(item.entryTime)
+                  .inMinutes;
 
               return Card(
-                elevation: 6,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.deepPurple,
-                    child: Text(
-                      "$slotNumber",
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  title: Text("Slot $slotNumber"),
+                  title: Text("Slot : ${item.slotNumber}",style: TextStyle(fontWeight: FontWeight.bold),),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Entry: $formattedEntry"),
-                      Text("Exit: $formattedExit"),
-                      Text("Fee: \$$fee"),
+                      Text("Entry : $entry"),
+                      Text("Exit : $exit"),
+                      Text("Duration : $duration minutes"),
                     ],
+                  ),
+                  trailing: Text(
+                    "₹${item.fee}",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               );

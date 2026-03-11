@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:parking_lot_app/screens/widgets/fee_summary_sheet.dart';
+import 'package:parking_lot_app/screens/widgets/release_dialog.dart';
+import 'package:parking_lot_app/screens/widgets/reservation_summary.dart';
+import 'package:parking_lot_app/screens/widgets/reserve_dialog.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/parking_provider.dart';
@@ -13,62 +17,41 @@ class SlotsPage extends StatelessWidget {
     final parkingProvider = Provider.of<ParkingProvider>(context);
     final userId = authProvider.user!.uid;
 
-    // Configurable total slots
-    final int totalSlots = 20;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Parking Lot",style: TextStyle(color: Colors.white,fontWeight: FontWeight.bold),),
+        title: const Text(
+          "Parking Lot",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.deepPurple,
-       leading: IconButton(
+        leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-
       ),
       body: StreamBuilder<List<ParkingSlot>>(
         stream: parkingProvider.slotsStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final slots = snapshot.data ?? [];
+          final slots = snapshot.data!;
 
           return Padding(
             padding: const EdgeInsets.all(12.0),
             child: GridView.builder(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount:3 , // 3 columns
+                crossAxisCount: 3,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
                 childAspectRatio: 1,
               ),
-              itemCount: totalSlots, // always show N slots
+              itemCount: slots.length,
               itemBuilder: (context, index) {
-                // If backend has fewer slots, fill with placeholder
-                final slot = index < slots.length ? slots[index] : null;
+                final slot = slots[index];
 
-                if (slot == null) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        "Slot ${index + 1}\nAvailable",
-                        style: const TextStyle(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-
-                final isOccupied = !slot.isAvailable;
+                final isOccupied = slot.isOccupied;
                 final isMine = slot.reservedBy == userId;
 
                 Color slotColor;
@@ -86,102 +69,104 @@ class SlotsPage extends StatelessWidget {
 
                     try {
                       if (!isOccupied) {
-                        // Reserve slot
-                        await parkingProvider.reserveSlot(
-                          slotId: slot.id,
-                          userId: userId,
-                        );
+                        ReserveDialog.show(context, slot.slotNumber, () async {
+                          await parkingProvider.reserveSlot(
+                            slotId: slot.id,
+                            userId: userId,
+                          );
 
-                        if (!context.mounted) return;
+                          if (!context.mounted) return;
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Reserved slot ${slot.slotNumber}"),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                          final entryTime = DateTime.now();
+
+                          ReservationSummary.show(
+                            context,
+                            slotNumber: slot.slotNumber,
+                            entryTime: entryTime,
+                          );
+
+                        });
                       } else if (isMine && slot.entryTime != null) {
-                        // Release slot
-                        final fee = await parkingProvider.releaseSlot(
-                          slotId: slot.id,
-                          entryTime: slot.entryTime!,
-                          userId: userId,
-                          slotNumber: slot.slotNumber,
-                        );
+                        ReleaseDialog.show(context, slot.slotNumber, () async {
+                          final exitTime = DateTime.now();
+                          final fee = parkingProvider.calculateFee(
+                            slot.entryTime!,
+                            exitTime,
+                          );
 
-                        if (!context.mounted) return;
+                          FeeSummarySheet.show(
+                            context,
+                            slotNumber: slot.slotNumber,
+                            entryTime: slot.entryTime!,
+                            exitTime: exitTime,
+                            fee: fee,
+                            onConfirm: () async {
+                              final finalFee = await parkingProvider
+                                  .releaseSlot(
+                                    slotId: slot.id,
+                                    entryTime: slot.entryTime!,
+                                    userId: userId,
+                                    slotNumber: slot.slotNumber,
+                                  );
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Released slot ${slot.slotNumber}. Fee: \$$fee",
-                            ),
-                          ),
-                        );
+                              if (!context.mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    "Slot ${slot.slotNumber} released. Fee: ₹$finalFee",
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        });
                       } else {
-                        if (!context.mounted) return;
-
+                        // Someone else's slot
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
+                            backgroundColor: Colors.redAccent,
                             content: Text(
                               "Slot ${slot.slotNumber} is occupied by another user.",
+                              style: TextStyle(color: Colors.white),
                             ),
                           ),
                         );
                       }
                     } catch (e) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error: ${e.toString()}")),
-                      );
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text("Error: $e")));
                     }
                   },
-                  child: Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: slotColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "Slot ${slot.slotNumber}",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (isOccupied)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6.0),
-                                  child: Text(
-                                    isMine ? "Your Reservation" : "Occupied",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (parkingProvider.isLoading)
-                        const Positioned.fill(
-                          child: Opacity(
-                            opacity: 0.5,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: slotColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "Slot ${slot.slotNumber}",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
                           ),
-                        ),
-                    ],
+                          if (isOccupied)
+                            Text(
+                              isMine ? "Your Reservation" : "Occupied",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },

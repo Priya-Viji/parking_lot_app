@@ -3,17 +3,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:parking_lot_app/providers/auth_provider.dart';
 import 'package:parking_lot_app/providers/parking_provider.dart';
 import 'package:parking_lot_app/screens/splash_screen.dart';
-import 'package:parking_lot_app/services/parking_service.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
+  //Firebase initialization
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // Run this ONCE to create slots 
-  final parkingService = ParkingService();
-  await parkingService.initializeSlots(20); // change 20 to any N you want
 
   runApp(const MyApp());
 }

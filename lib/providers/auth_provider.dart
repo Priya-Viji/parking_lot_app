@@ -11,11 +11,12 @@ class AuthProvider extends ChangeNotifier {
   bool _obscurePassword = true;
   bool get obscurePassword => _obscurePassword;
 
-  User? _user;
-  User? get user => _user;
+  String? _errorMessage; 
+  String? get errorMessage => _errorMessage; 
 
-  String? _errorMessage; // <-- add this
-  String? get errorMessage => _errorMessage; // <-- getter
+  User? get user => _authService.currentUser;
+
+  //Helpers
 
   void togglePasswordVisibility() {
     _obscurePassword = !_obscurePassword;
@@ -27,64 +28,61 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---------------------------
+  void _setError(String? message) {
+    _errorMessage = message;
+    notifyListeners();
+  }
+  
   // Login
-  // ---------------------------
+
   Future<bool> login(String email, String password) async {
     _setLoading(true);
     try {
-      _user = await _authService.login(email, password);
-      _errorMessage = null; // clear error on success
-      return _user != null;
+      final result = await _authService.login(email, password);
+      _setError(null);
+      return result != null;
     } on FirebaseAuthException catch (e) {
-      _errorMessage = e.message; // capture Firebase error
+      _setError(e.message);
       return false;
     } catch (e) {
-      _errorMessage = e.toString(); // capture other errors
+      _setError(e.toString());
       return false;
     } finally {
       _setLoading(false);
-      notifyListeners();
     }
   }
 
-  // ---------------------------
   // Signup
-  // ---------------------------
-  Future<bool> signup(String email, String password,String name) async {
+
+   Future<bool> signup(String email, String password, String name) async {
     _setLoading(true);
     try {
-      _user = await _authService.signUp(email, password,name);
-      _errorMessage = null;
-      return _user != null;
+      final result = await _authService.signUp(email, password, name);
+      _setError(null);
+      return result != null;
     } on FirebaseAuthException catch (e) {
-      _errorMessage = e.message;
+      _setError(e.message);
       return false;
     } catch (e) {
-      _errorMessage = e.toString();
+      _setError(e.toString());
       return false;
     } finally {
       _setLoading(false);
-      notifyListeners();
     }
   }
 
-  // ---------------------------
   // Logout
-  // ---------------------------
+
   Future<void> logout() async {
     await _authService.logout();
-    _user = null;
     notifyListeners();
   }
 
-  // ---------------------------
-  // Auto-login (check local storage)
-  // ---------------------------
+  // Auto-login
+  
   Future<bool> tryAutoLogin() async {
     final loggedIn = await _authService.isLoggedIn();
     if (loggedIn) {
-      _user = _authService.currentUser;
       notifyListeners();
     }
     return loggedIn;
