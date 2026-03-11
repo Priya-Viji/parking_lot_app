@@ -32,6 +32,7 @@ This includes 100 for the first hour (9:00–10:00) and 100 for the next hour (1
 
 ## Project Structure
 
+
 lib/
  ├── models/
  ├── providers/
@@ -46,7 +47,8 @@ lib/
 ### 1. Clone the repository
 
 git clone https://github.com/your-username/parking-lot-app.git
-cd parking-lot-app
+
+cd parking_lot_app
 
 ### 2. Install dependencies
 
@@ -60,6 +62,7 @@ flutter pub get
 - Place them in the correct platform folders.
 
 ### 4. Run the application
+
 flutter run
 
 
